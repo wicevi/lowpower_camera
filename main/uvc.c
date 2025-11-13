@@ -18,6 +18,7 @@
 #include "bsp/esp-bsp.h"
 #endif
 #include "uvc.h"
+#include "camera_uvc_controls.h"
 
 static const char *TAG = "UVC";
 
@@ -246,6 +247,9 @@ esp_err_t uvc_init(void)
 
     if(xfer_buffer_a == NULL || xfer_buffer_b == NULL || frame_buffer == NULL){
         ESP_LOGE(TAG, "line-%u: Memory allocation failed", __LINE__);
+        free(xfer_buffer_a);
+        free(xfer_buffer_b);
+        free(frame_buffer);
         return ESP_FAIL;
     }
 
@@ -266,36 +270,58 @@ esp_err_t uvc_init(void)
     ret = uvc_streaming_config(&uvc_config);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "UVC streaming config failed");
+        free(xfer_buffer_a);
+        free(xfer_buffer_b);
+        free(frame_buffer);
         return ESP_FAIL;
     }
 
     ret = usb_streaming_state_register(&stream_state_changed_cb, NULL);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "UVC state callback registration failed");
+        free(xfer_buffer_a);
+        free(xfer_buffer_b);
+        free(frame_buffer);
         return ESP_FAIL;
     }
 
     ret = usb_streaming_start();
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "UVC streaming start failed");
+        free(xfer_buffer_a);
+        free(xfer_buffer_b);
+        free(frame_buffer);
         return ESP_FAIL;
     }
 
     ret = usb_streaming_connect_wait((UVC_CON_TIMEOUT * 1000) / portTICK_PERIOD_MS); 
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "UVC connection timeout");
+        free(xfer_buffer_a);
+        free(xfer_buffer_b);
+        free(frame_buffer);
         return ESP_FAIL;
-    }
+}
+    
+    // Initialize UVC controls
+    // ESP_LOGI(TAG, "Initializing UVC controls...");
+    // vTaskDelay(pdMS_TO_TICKS(2000));  // Wait for camera to stabilize
+    
+    // extern esp_err_t camera_uvc_detect_capabilities(void);
+    // extern esp_err_t camera_uvc_apply_indoor_settings(void);
+    
+    // camera_uvc_detect_capabilities();
+    // camera_uvc_apply_indoor_settings();
+    
     return ESP_OK;
 }
 
 /**
  * @brief Deinitialize UVC subsystem
- * @return Always returns ESP_OK
  */
-esp_err_t uvc_deinit(void)
+void uvc_deinit(void)
 {
     // usb_streaming_control(STREAM_UVC, CTRL_SUSPEND, NULL);
     // usb_streaming_stop();
-    return ESP_OK;
+    // vEventGroupDelete(s_evt_handle);
 }

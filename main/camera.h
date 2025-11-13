@@ -18,8 +18,6 @@ typedef enum cameraEvent {
 } cameraEvent_e;
 
 
-#define CAMERA_USE_UVC  0
-
 /**
  * @brief Get frame buffer for streaming
  * @return Pointer to frame buffer structure
@@ -76,10 +74,9 @@ esp_err_t camera_snapshot(snapType_e type, uint8_t count);
 /**
  * Configure image capture settings
  * @param image Image attributes to apply
- * @param is_force Force apply settings even if unchanged
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t camera_set_image(imgAttr_t *image, bool is_force);
+esp_err_t camera_set_image(imgAttr_t *image);
 
 /**
  * Control camera flash LED
@@ -93,6 +90,12 @@ esp_err_t camera_flash_led_ctrl(lightAttr_t *light);
  * @return true if snapshot failed, false otherwise
  */
 bool camera_is_snapshot_fail();
+
+/**
+ * Get camera backend name
+ * @return Camera backend name
+ */
+const char *camera_get_backend_name();
 
 #ifdef __cplusplus
 }
