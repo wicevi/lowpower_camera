@@ -557,30 +557,40 @@ void sleep_start(void)
     rtc_gpio_pulldown_dis(BTN_WAKEUP_PIN);
     esp_sleep_enable_ext0_wakeup(BTN_WAKEUP_PIN, BTN_WAKEUP_LEVEL);
 
-#if PIR_ENABLE
+    // Get trigger mode from configuration (only if trigger capture is enabled)
+    uint8_t trigger_mode = TRIGGER_MODE_DISABLED;
     if(capture.bAlarmInCap == true){
-        esp_sleep_enable_ext1_wakeup(BIT64(PIR_WAKEUP_PIN), PIR_IN_ACTIVE);
-        esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
-        rtc_gpio_pullup_dis(PIR_WAKEUP_PIN);
-        rtc_gpio_pulldown_en(PIR_WAKEUP_PIN);
+        cfg_get_trigger_mode(&trigger_mode);
+        
+        if(trigger_mode == TRIGGER_MODE_PIR){
+            // PIR trigger mode
+            esp_sleep_enable_ext1_wakeup(BIT64(PIR_WAKEUP_PIN), PIR_IN_ACTIVE);
+            esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+            rtc_gpio_pullup_dis(PIR_WAKEUP_PIN);
+            rtc_gpio_pulldown_en(PIR_WAKEUP_PIN);
+            ESP_LOGI(TAG, "Enabling PIR wakeup on pin GPIO%d", PIR_WAKEUP_PIN);
+        } else if(trigger_mode == TRIGGER_MODE_ALARM){
+            // Alarm input trigger mode
+            rtc_gpio_pullup_en(ALARMIN_WAKEUP_PIN);
+            rtc_gpio_pulldown_dis(ALARMIN_WAKEUP_PIN);
+            esp_sleep_enable_ext1_wakeup(BIT64(ALARMIN_WAKEUP_PIN), ALARMIN_WAKEUP_LEVEL);
+            ESP_LOGI(TAG, "Enabling ALARM wakeup on pin GPIO%d", ALARMIN_WAKEUP_PIN);
+        } else {
+            // TRIGGER_MODE_DISABLED or invalid - no wakeup configured
+            ESP_LOGI(TAG, "Trigger mode disabled or invalid, no external wakeup configured");
+        }
+    } else {
+        ESP_LOGI(TAG, "Trigger capture disabled, no external wakeup configured");
     }
-#else
-    if(capture.bAlarmInCap == true){
-        rtc_gpio_pullup_en(ALARMIN_WAKEUP_PIN);
-        rtc_gpio_pulldown_dis(ALARMIN_WAKEUP_PIN);
-        esp_sleep_enable_ext1_wakeup(BIT64(ALARMIN_WAKEUP_PIN), ALARMIN_WAKEUP_LEVEL);
-    }
-#endif
 
     mqtt_stop();
     wifi_close();
     cat1_close();
-#if PIR_ENABLE
-    if(capture.bAlarmInCap == true){
+    
+    if(capture.bAlarmInCap == true && trigger_mode == TRIGGER_MODE_PIR){
         esp_log_level_set("gpio", ESP_LOG_WARN);
         pir_init(1);
     }
-#endif
     ESP_LOGI(TAG, "Entering deep sleep");
     esp_deep_sleep_start();
 }

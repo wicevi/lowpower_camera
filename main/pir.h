@@ -13,5 +13,6 @@
 
 void pir_init(uint8_t is_first);
 void pir_int_trigger(void);
+void pir_update_config(void);
 
 #endif

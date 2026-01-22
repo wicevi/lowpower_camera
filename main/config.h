@@ -114,6 +114,11 @@ extern "C" {
 #define KEY_CAT1_PIN        "cat1:pin"
 #define KEY_CAT1_AUTH_TYPE  "cat1:authType"
 #define KEY_CAT1_BAUD_RATE  "cat1:baudRate"
+#define KEY_TRIGGER_MODE    "trigger:mode"
+#define KEY_PIR_SENS        "pir:sens"
+#define KEY_PIR_BLIND       "pir:blind"
+#define KEY_PIR_PULSE       "pir:pulse"
+#define KEY_PIR_WINDOW      "pir:window"
 
 
 /**
@@ -339,6 +344,25 @@ typedef struct cellularParamAttr {
     uint8_t authentication;
 } cellularParamAttr_t;
 
+/**
+ * Trigger mode enumeration
+ */
+typedef enum {
+    TRIGGER_MODE_DISABLED = 0,  // All triggers disabled
+    TRIGGER_MODE_ALARM = 1,     // Alarm input trigger
+    TRIGGER_MODE_PIR = 2        // PIR trigger
+} triggerMode_e;
+
+/**
+ * PIR sensor configuration structure
+ */
+typedef struct pirAttr {
+    uint8_t sens;    // [7:0] Sensitivity setting (0-255), recommended > 20, minimum 10
+    uint8_t blind;  // [3:0] Blind time after interrupt (0-15), time = value * 0.5s + 0.5s
+    uint8_t pulse;  // [1:0] Pulse counter (0-3), pulse count = value + 1
+    uint8_t window; // [1:0] Window time (0-3), time = value * 2s + 2s
+} pirAttr_t;
+
 esp_err_t cfg_init(void);
 esp_err_t cfg_deinit();
 void cfg_dump();
@@ -389,6 +413,10 @@ esp_err_t cfg_set_cellular_baud_rate(uint32_t baudRate);
 esp_err_t cfg_set_ntp_sync(uint8_t enable);
 esp_err_t cfg_get_ntp_sync(uint8_t *enable);
 bool cfg_is_undefined(char *value);
+esp_err_t cfg_get_trigger_mode(uint8_t *mode);
+esp_err_t cfg_set_trigger_mode(uint8_t mode);
+esp_err_t cfg_get_pir_attr(pirAttr_t *pir);
+esp_err_t cfg_set_pir_attr(pirAttr_t *pir);
 
 #ifdef __cplusplus
 }

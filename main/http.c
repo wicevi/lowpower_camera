@@ -23,6 +23,7 @@
 #include "net_module.h"
 #include "storage.h"
 #include "utils.h"
+#include "pir.h"
 
 #define TAG "-->HTTP"  // Logging tag for HTTP module
 
@@ -267,6 +268,11 @@ esp_err_t set_cam_param_handle(httpd_req_t *req)
         s2j_struct_get_basic_element(image, json, int, quality);
         s2j_struct_get_basic_element(image, json, int, hdrEnable);
 
+        // Apply JPEG quality limit for resolutions > 3MP
+        if (image->frameSize < FRAMESIZE_INVALID && image->quality <= 63) {
+            camera_apply_jpeg_quality_limit((framesize_t)image->frameSize, &image->quality);
+        }
+
         if (camera_set_image(image) == ESP_OK) {
             http_send_json_response(req, RES_OK);
             cfg_set_image_attr(image);
@@ -413,6 +419,114 @@ esp_err_t set_cap_param_handle(httpd_req_t *req)
         sleep_set_last_capture_time(time(NULL));
         s2j_delete_struct_obj(capture);
         s2j_delete_json_obj(json);
+        http_free_content(content);
+        return ESP_OK;
+    }
+    return ESP_FAIL;
+}
+
+esp_err_t get_trigger_param_handle(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "%s", req->uri);
+    char *str = NULL;
+    uint8_t trigger_mode;
+    pirAttr_t pir_attr;
+
+    clear_timeout();
+    httpd_resp_set_type(req, "application/json");
+
+    cfg_get_trigger_mode(&trigger_mode);
+    cfg_get_pir_attr(&pir_attr);
+
+    /* create JSON object */
+    s2j_create_json_obj(json_obj);
+    cJSON_AddNumberToObject(json_obj, "trigger_mode", trigger_mode);
+    s2j_json_set_basic_element(json_obj, &pir_attr, int, sens);
+    s2j_json_set_basic_element(json_obj, &pir_attr, int, blind);
+    s2j_json_set_basic_element(json_obj, &pir_attr, int, pulse);
+    s2j_json_set_basic_element(json_obj, &pir_attr, int, window);
+
+    str = cJSON_PrintUnformatted(json_obj);
+    httpd_resp_sendstr(req, str);
+    cJSON_free(str);
+    s2j_delete_json_obj(json_obj);
+
+    return ESP_OK;
+}
+
+esp_err_t set_trigger_param_handle(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "%s", req->uri);
+    clear_timeout();
+
+    char *content = http_get_content_from_req(req);
+    if (content) {
+        uint8_t trigger_mode;
+        pirAttr_t pir_attr;
+
+        cJSON *json = cJSON_Parse(content);
+        if (json == NULL) {
+            http_free_content(content);
+            return ESP_FAIL;
+        }
+
+        // Get current values
+        cfg_get_trigger_mode(&trigger_mode);
+        cfg_get_pir_attr(&pir_attr);
+
+        // Update trigger mode if provided
+        if (cJSON_HasObjectItem(json, "trigger_mode")) {
+            trigger_mode = cJSON_GetObjectItem(json, "trigger_mode")->valueint;
+            if (trigger_mode > TRIGGER_MODE_PIR) {
+                trigger_mode = TRIGGER_MODE_DISABLED;
+            }
+            cfg_set_trigger_mode(trigger_mode);
+        }
+
+        // Update PIR parameters if provided with validation
+        // Sensitivity: 0-255, recommended > 20, minimum 10 (no interference)
+        // Smaller values = more sensitive but easier false alarms
+        if (cJSON_HasObjectItem(json, "sens")) {
+            int sens_val = cJSON_GetObjectItem(json, "sens")->valueint;
+            if (sens_val < 0) sens_val = 0;
+            if (sens_val > 255) sens_val = 255;
+            pir_attr.sens = (uint8_t)sens_val;
+        }
+        // Blind time: 0-15 (4 bits), range 0.5s ~ 8s
+        // Formula: interrupt time = register value * 0.5s + 0.5s
+        if (cJSON_HasObjectItem(json, "blind")) {
+            int blind_val = cJSON_GetObjectItem(json, "blind")->valueint;
+            if (blind_val < 0) blind_val = 0;
+            if (blind_val > 15) blind_val = 15;
+            pir_attr.blind = (uint8_t)(blind_val & 0x0F);
+        }
+        // Pulse count: 0-3 (2 bits), range 1 ~ 4
+        // Formula: pulse count = register value + 1
+        // Larger value = stronger anti-interference but slightly reduced sensitivity
+        if (cJSON_HasObjectItem(json, "pulse")) {
+            int pulse_val = cJSON_GetObjectItem(json, "pulse")->valueint;
+            if (pulse_val < 0) pulse_val = 0;
+            if (pulse_val > 3) pulse_val = 3;
+            pir_attr.pulse = (uint8_t)(pulse_val & 0x03);
+        }
+        // Window time: 0-3 (2 bits), range 2s ~ 8s
+        // Formula: window time = register value * 2s + 2s
+        if (cJSON_HasObjectItem(json, "window")) {
+            int window_val = cJSON_GetObjectItem(json, "window")->valueint;
+            if (window_val < 0) window_val = 0;
+            if (window_val > 3) window_val = 3;
+            pir_attr.window = (uint8_t)(window_val & 0x03);
+        }
+
+        cfg_set_pir_attr(&pir_attr);
+        
+        // Update PIR configuration if in PIR mode
+        if (trigger_mode == TRIGGER_MODE_PIR) {
+            pir_update_config();
+        }
+
+        http_send_json_response(req, RES_OK);
+        cJSON_Delete(json);
         http_free_content(content);
         return ESP_OK;
     }
@@ -1509,6 +1623,16 @@ static const httpd_uri_t g_webHandlers[] = {
         .uri = "/api/v1/capture/getUploadParam",
         .method = HTTP_GET,
         .handler = get_upload_param_handle,
+    },
+    {
+        .uri = "/api/v1/capture/getTriggerParam",
+        .method = HTTP_GET,
+        .handler = get_trigger_param_handle,
+    },
+    {
+        .uri = "/api/v1/capture/setTriggerParam",
+        .method = HTTP_POST,
+        .handler = set_trigger_param_handle,
     },
     {
         .uri = "/api/v1/network/getWifiParam",

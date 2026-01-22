@@ -1302,3 +1302,75 @@ esp_err_t cfg_import(char *data, size_t len)
     iniparser_freedict(d);
     return ESP_OK;
 }
+
+esp_err_t cfg_get_trigger_mode(uint8_t *mode)
+{
+    mutex_lock();
+    get_u8(g_userHandle, KEY_TRIGGER_MODE, mode, TRIGGER_MODE_ALARM);
+    mutex_unlock();
+    return ESP_OK;
+}
+
+esp_err_t cfg_set_trigger_mode(uint8_t mode)
+{
+    mutex_lock();
+    set_u8(g_userHandle, KEY_TRIGGER_MODE, mode);
+    commit_cfg(g_userHandle);
+    mutex_unlock();
+    return ESP_OK;
+}
+
+esp_err_t cfg_get_pir_attr(pirAttr_t *pir)
+{
+    mutex_lock();
+    memset(pir, 0, sizeof(pirAttr_t));
+    get_u8(g_userHandle, KEY_PIR_SENS, &pir->sens, 0x0f);
+    get_u8(g_userHandle, KEY_PIR_BLIND, &pir->blind, 0x03);
+    get_u8(g_userHandle, KEY_PIR_PULSE, &pir->pulse, 0x01);
+    get_u8(g_userHandle, KEY_PIR_WINDOW, &pir->window, 0x00);
+    
+    // Validate and clamp values to valid ranges
+    // Sensitivity: 0-255, recommended > 20, minimum 10 (no interference)
+    // Note: pir->sens is uint8_t, so it's already in range 0-255, no need to check
+    
+    // Blind time: 0-15 (4 bits), range 0.5s ~ 8s
+    // Formula: interrupt time = register value * 0.5s + 0.5s
+    if (pir->blind > 15) pir->blind = 15;
+    
+    // Pulse count: 0-3 (2 bits), range 1 ~ 4
+    // Formula: pulse count = register value + 1
+    if (pir->pulse > 3) pir->pulse = 3;
+    
+    // Window time: 0-3 (2 bits), range 2s ~ 8s
+    // Formula: window time = register value * 2s + 2s
+    if (pir->window > 3) pir->window = 3;
+    
+    mutex_unlock();
+    return ESP_OK;
+}
+
+esp_err_t cfg_set_pir_attr(pirAttr_t *pir)
+{
+    mutex_lock();
+    // Validate and clamp values before saving
+    // Sensitivity: 0-255, recommended > 20, minimum 10 (no interference)
+    // Note: pir->sens is uint8_t, so it's already in range 0-255, no need to check
+    uint8_t sens = pir->sens;
+    // Blind time: 0-15 (4 bits), range 0.5s ~ 8s
+    // Formula: interrupt time = register value * 0.5s + 0.5s
+    uint8_t blind = (pir->blind > 15) ? 15 : (pir->blind & 0x0F);
+    // Pulse count: 0-3 (2 bits), range 1 ~ 4
+    // Formula: pulse count = register value + 1
+    uint8_t pulse = (pir->pulse > 3) ? 3 : (pir->pulse & 0x03);
+    // Window time: 0-3 (2 bits), range 2s ~ 8s
+    // Formula: window time = register value * 2s + 2s
+    uint8_t window = (pir->window > 3) ? 3 : (pir->window & 0x03);
+    
+    set_u8(g_userHandle, KEY_PIR_SENS, sens);
+    set_u8(g_userHandle, KEY_PIR_BLIND, blind);
+    set_u8(g_userHandle, KEY_PIR_PULSE, pulse);
+    set_u8(g_userHandle, KEY_PIR_WINDOW, window);
+    commit_cfg(g_userHandle);
+    mutex_unlock();
+    return ESP_OK;
+}

@@ -472,105 +472,6 @@
                             </span>
                         </div>
 
-                        <!-- camera warm-up delay -->
-                        <div class="card-item" v-show="scheduledCaptureEnable">
-                            <span class="card-item-label">{{ $t("cap.openStableMs") }}
-                                <span class="icon" @click="showTipsDialog($t('cap.openStableTip'))">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="#888">
-                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm2 13h-4v-2h1v-4h-1v-2h3v6h1v2z"/>
-                                    </svg>
-                                </span>
-                            </span>
-                            <span class="card-item-content">
-                                <input
-                                    class="capture-interval-input"
-                                    type="text"
-                                    v-model="camWarmupMs"
-                                    maxlength="6"
-                                    v-effect="inputNumLimit('camWarmupMs')"
-                                    @blur="setCaptureInfo()"
-                                />
-                                <span style="margin-left:8px;">ms</span>
-                            </span>
-                        </div>
-
-
-                        <!-- scheduled upload time -->
-                     <div class="card-item" v-show="scheduledCaptureEnable">
-                              <span class="card-item-label"
-                               >{{ $t("cap.uploadMode") }}</span>
-                          <span class="card-item-content">
-                             <div class="normal-select"
-                             v-if="uploadModeMount"
-                             v-scope="MsSelect({value: uploadMode, options: uploadModeOptions})" @change-select="changeUploadMode"></div>
-                         </span>
-                    </div>
-                        <div
-                        class="card-item capture-time-content"
-                        v-show="scheduledCaptureEnable && uploadMode == 1"
-                    >
-                        <span class="card-item-label"
-                            >{{ $t("cap.timeSet") }}</span
-                        >
-                        <span class="card-item-content">
-                            <div
-                                class="capture-time-select"
-                                v-scope="MsSelect({value: uploadTimeSetDay, options: timeDayOptions})"
-                                @change-select="changeUploadTimeSetDay"
-                            ></div>
-                            <span class="number">
-                                <input
-                                    type="text"
-                                    maxlength="2"
-                                    v-model="uploadTimeSetHour"
-                                    v-effect="inputNumLimit('uploadTimeSetHour')"
-                                    @blur="inputUploadTime('uploadTimeSetHour')"
-                                />
-                                <span>:</span>
-                                <input
-                                    type="text"
-                                    maxlength="2"
-                                    v-model="uploadTimeSetMinute"
-                                    v-effect="inputNumLimit('uploadTimeSetMinute')"
-                                    @blur="inputUploadTime('uploadTimeSetMinute')"
-                                />
-                            </span>
-
-                            <button
-                                class="mini"
-                                @click="addUploadTimeSetting"
-                                :disabled="timeUploadList.length>=10"
-                            >
-                                +
-                            </button>
-                        </span>
-                    </div>
-                    
-                    <div
-                        class="card-list upload-time-list"
-                        v-show="scheduledCaptureEnable && uploadMode == 1"
-                    >
-                        <div
-                            class="card-time-list-item"
-                            v-for="(item, index) in timeUploadList"
-                        >
-                            <span
-                                class="time-list-item-day"
-                                v-text="getTimeUploadDayLabel(item.day)"
-                            ></span>
-                            <span class="time-list-item-time"
-                                >{{ item.time.substr(0, item.time.length-3) }}</span
-                            >
-                            <button
-                                class="icon time-list-item-btn"
-                                @click="deleteUploadTimeSetting(index)"
-                            >
-                                X
-                            </button>
-                        </div>
-                    </div>
-                    <!-- end scheduled upload time -->
-
                         <div class="card-item">
                             <span class="card-item-label"
                                 >{{ $t("cap.enableAlarmInCap") }}</span
@@ -588,6 +489,90 @@
                                         class="switch-content"
                                     ></label>
                                 </span>
+                            </span>
+                        </div>
+                        <!-- Trigger Mode (only show when trigger capture is enabled) -->
+                        <div v-show="capAlarmInEnable" class="card-item">
+                            <span class="card-item-label"
+                                >{{ $t("cap.triggerMode") }}</span
+                            >
+                            <span class="card-item-content">
+                                <div
+                                    class="trigger-mode-select"
+                                    v-scope="MsSelect({value: triggerMode, options: triggerModeOptions})"
+                                    v-if="triggerMount"
+                                    @change-select="changeTriggerMode"
+                                ></div>
+                            </span>
+                        </div>
+                        <!-- PIR Settings (only show when PIR mode is selected) -->
+                        <div v-show="capAlarmInEnable && triggerMode == 2" class="card-item">
+                            <span class="card-item-label"
+                                >{{ $t("cap.pirSettings") }}</span
+                            >
+                        </div>
+                        <div v-show="capAlarmInEnable && triggerMode == 2" class="card-item">
+                            <span class="card-item-label"
+                                >{{ $t("cap.pirSensitivity") }}</span
+                            >
+                            <span class="card-item-content">
+                                <input
+                                    class="pir-param-input"
+                                    type="text"
+                                    v-model="pirSens"
+                                    maxlength="3"
+                                    v-effect="inputNumLimit('pirSens')"
+                                    @blur="validatePirSens()"
+                                />
+                                <span class="pir-param-unit">&nbsp;</span>
+                            </span>
+                        </div>
+                        <div v-show="capAlarmInEnable && triggerMode == 2" class="card-item">
+                            <span class="card-item-label"
+                                >{{ $t("cap.pirBlindTime") }}</span
+                            >
+                            <span class="card-item-content">
+                                <input
+                                    class="pir-param-input"
+                                    type="text"
+                                    v-model="pirBlind"
+                                    maxlength="4"
+                                    v-effect="inputDecimalLimit('pirBlind')"
+                                    @blur="validatePirBlind()"
+                                />
+                                <span class="pir-param-unit">s</span>
+                            </span>
+                        </div>
+                        <div v-show="capAlarmInEnable && triggerMode == 2" class="card-item">
+                            <span class="card-item-label"
+                                >{{ $t("cap.pirPulseCount") }}</span
+                            >
+                            <span class="card-item-content">
+                                <input
+                                    class="pir-param-input"
+                                    type="text"
+                                    v-model="pirPulse"
+                                    maxlength="1"
+                                    v-effect="inputNumLimit('pirPulse')"
+                                    @blur="validatePirPulse()"
+                                />
+                                <span class="pir-param-unit">{{ $t("cap.pirPulseUnit") }}</span>
+                            </span>
+                        </div>
+                        <div v-show="capAlarmInEnable && triggerMode == 2" class="card-item">
+                            <span class="card-item-label"
+                                >{{ $t("cap.pirWindowTime") }}</span
+                            >
+                            <span class="card-item-content">
+                                <input
+                                    class="pir-param-input"
+                                    type="text"
+                                    v-model="pirWindow"
+                                    maxlength="4"
+                                    v-effect="inputDecimalLimit('pirWindow')"
+                                    @blur="validatePirWindow()"
+                                />
+                                <span class="pir-param-unit">s</span>
                             </span>
                         </div>
                         <div class="card-item">
@@ -609,6 +594,105 @@
                                 </span>
                             </span>
                         </div>
+                        
+                        <!-- Camera warm-up delay (moved before Image Upload Mode) -->
+                        <div class="card-item">
+                            <span class="card-item-label">{{ $t("cap.openStableMs") }}
+                                <span class="icon" @click="showTipsDialog($t('cap.openStableTip'))">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="#888">
+                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm2 13h-4v-2h1v-4h-1v-2h3v6h1v2z"/>
+                                    </svg>
+                                </span>
+                            </span>
+                            <span class="card-item-content">
+                                <input
+                                    class="capture-interval-input"
+                                    type="text"
+                                    v-model="camWarmupMs"
+                                    maxlength="6"
+                                    v-effect="inputNumLimit('camWarmupMs')"
+                                    @blur="setCaptureInfo()"
+                                />
+                                <span style="margin-left:8px;">ms</span>
+                            </span>
+                        </div>
+                        
+                        <!-- Image Upload Mode (moved to end, used by all capture modes) -->
+                        <div class="card-item">
+                            <span class="card-item-label"
+                                >{{ $t("cap.uploadMode") }}</span>
+                            <span class="card-item-content">
+                                <div class="normal-select"
+                                    v-if="uploadModeMount"
+                                    v-scope="MsSelect({value: uploadMode, options: uploadModeOptions})" 
+                                    @change-select="changeUploadMode"></div>
+                            </span>
+                        </div>
+                        <div
+                            class="card-item capture-time-content"
+                            v-show="uploadMode == 1"
+                        >
+                            <span class="card-item-label"
+                                >{{ $t("cap.timeSet") }}</span
+                            >
+                            <span class="card-item-content">
+                                <div
+                                    class="capture-time-select"
+                                    v-scope="MsSelect({value: uploadTimeSetDay, options: timeDayOptions})"
+                                    @change-select="changeUploadTimeSetDay"
+                                ></div>
+                                <span class="number">
+                                    <input
+                                        type="text"
+                                        maxlength="2"
+                                        v-model="uploadTimeSetHour"
+                                        v-effect="inputNumLimit('uploadTimeSetHour')"
+                                        @blur="inputUploadTime('uploadTimeSetHour')"
+                                    />
+                                    <span>:</span>
+                                    <input
+                                        type="text"
+                                        maxlength="2"
+                                        v-model="uploadTimeSetMinute"
+                                        v-effect="inputNumLimit('uploadTimeSetMinute')"
+                                        @blur="inputUploadTime('uploadTimeSetMinute')"
+                                    />
+                                </span>
+
+                                <button
+                                    class="mini"
+                                    @click="addUploadTimeSetting"
+                                    :disabled="timeUploadList.length>=10"
+                                >
+                                    +
+                                </button>
+                            </span>
+                        </div>
+                        
+                        <div
+                            class="card-list upload-time-list"
+                            v-show="uploadMode == 1"
+                        >
+                            <div
+                                class="card-time-list-item"
+                                v-for="(item, index) in timeUploadList"
+                            >
+                                <span
+                                    class="time-list-item-day"
+                                    v-text="getTimeUploadDayLabel(item.day)"
+                                ></span>
+                                <span class="time-list-item-time"
+                                    >{{ item.time.substr(0, item.time.length-3) }}</span
+                                >
+                                <button
+                                    class="icon time-list-item-btn"
+                                    @click="deleteUploadTimeSetting(index)"
+                                >
+                                    X
+                                </button>
+                            </div>
+                        </div>
+                        <!-- end Image Upload Mode -->
                     </div>
                     <!-- E Capture Setting -->
 

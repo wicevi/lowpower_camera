@@ -39,7 +39,7 @@
 #define MQTT_PUBLISHED_TIMEOUT_MS (20000)      // Publish timeout
 
 // Buffer sizes
-#define MQTT_SEND_BUFFER_SIZE  (1024000)  // Send buffer size
+#define MQTT_SEND_BUFFER_SIZE  (1536000)  // Send buffer size
 #define MQTT_RECV_BUFFER_SIZE 8192       // Receive buffer size
 
 #define TAG "-->MQTT"  // Logging tag

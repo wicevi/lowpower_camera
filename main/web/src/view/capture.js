@@ -91,6 +91,23 @@ function Capture() {
         capButtonEnable: true,
         captureMount: false,
         timeIntervalUnitMount: false,
+        triggerMode: 1, // 1: alarm, 2: PIR (0 is disabled, but not shown in UI)
+        triggerModeOptions: [
+            {
+                label: $t('cap.triggerModeAlarm'),
+                value: 1,
+            },
+            {
+                label: $t('cap.triggerModePIR'),
+                value: 2,
+            },
+        ],
+        pirSens: 15,        // Sensitivity: 0-255 (raw value, no conversion)
+        pirBlind: 2.0,      // Blind time: seconds (display = (reg * 0.5) + 0.5)
+        pirPulse: 2,        // Pulse count: times (display = reg + 1)
+        pirWindow: 2.0,     // Window time: seconds (display = (reg * 2) + 2)
+        triggerMount: false,
+        savedTriggerMode: 1, // Save previous trigger mode when disabling
 
         // scheduled upload
         uploadTimeSetHour: '00',
@@ -158,7 +175,98 @@ function Capture() {
             this.capAlarmInEnable = res.bAlarmInCap ? true : false;
             this.capButtonEnable = res.bButtonCap ? true : false;
             this.camWarmupMs = res.camWarmupMs || 5000;
+            // After getting capture info, get trigger info
+            await this.getTriggerInfo();
             return;
+        },
+        async getTriggerInfo() {
+            try {
+                const res = await getData(URL.getTriggerParam);
+                // Only set trigger mode if trigger capture is enabled
+                if (this.capAlarmInEnable) {
+                    // Ensure trigger mode is valid (1 or 2, not 0)
+                    // If server returns 0, use saved trigger mode if available, otherwise default to 1
+                    const mode = res.trigger_mode || 0;
+                    if (mode > 0) {
+                        this.triggerMode = mode;
+                        // Update saved trigger mode when we get a valid value from server
+                        this.savedTriggerMode = mode;
+                    } else if (this.savedTriggerMode > 0) {
+                        // Server returned 0, but we have a saved value, restore it
+                        this.triggerMode = this.savedTriggerMode;
+                    } else {
+                        // No saved value, default to alarm mode
+                        this.triggerMode = 1;
+                        this.savedTriggerMode = 1;
+                    }
+                } else {
+                    this.triggerMode = 0; // Disabled when trigger capture is off
+                }
+                // Convert register values to display values
+                this.pirSens = res.sens || 15; // No conversion needed
+                // Blind time: display = (reg * 0.5) + 0.5
+                this.pirBlind = ((res.blind || 3) * 0.5) + 0.5;
+                // Pulse count: display = reg + 1
+                this.pirPulse = (res.pulse || 1) + 1;
+                // Window time: display = (reg * 2) + 2
+                this.pirWindow = ((res.window || 0) * 2) + 2;
+                this.triggerMount = true;
+            } catch (error) {
+                console.error('Failed to get trigger info:', error);
+                // On error, ensure triggerMount is set so UI can render
+                this.triggerMount = true;
+            }
+        },
+        async setTriggerInfo() {
+            try {
+                // Validate and convert display values to register values
+                // Sensitivity: 0-255, recommended > 20, minimum 10 (no interference)
+                let sens = Number(this.pirSens);
+                if (isNaN(sens) || sens < 0) sens = 15;
+                if (sens > 255) sens = 255;
+                // Note: Values < 10 may cause false alarms, > 20 is recommended
+                
+                // Blind time: display range 0.5s ~ 8s, reg range 0-15
+                // Formula: interrupt time = register value * 0.5s + 0.5s
+                let blindDisplay = Number(this.pirBlind);
+                if (isNaN(blindDisplay) || blindDisplay < 0.5) blindDisplay = 0.5;
+                if (blindDisplay > 8) blindDisplay = 8;
+                const blind = Math.round((blindDisplay - 0.5) * 2);
+                
+                // Pulse count: display range 1 ~ 4, reg range 0-3
+                // Formula: pulse count = register value + 1
+                let pulseDisplay = Number(this.pirPulse);
+                if (isNaN(pulseDisplay) || pulseDisplay < 1) pulseDisplay = 1;
+                if (pulseDisplay > 4) pulseDisplay = 4;
+                const pulse = pulseDisplay - 1;
+                
+                // Window time: display range 2s ~ 8s, reg range 0-3
+                // Formula: window time = register value * 2s + 2s
+                let windowDisplay = Number(this.pirWindow);
+                if (isNaN(windowDisplay) || windowDisplay < 2) windowDisplay = 2;
+                if (windowDisplay > 8) windowDisplay = 8;
+                const window = Math.round((windowDisplay - 2) / 2);
+                
+                await postData(URL.setTriggerParam, {
+                    trigger_mode: Number(this.triggerMode),
+                    sens: sens,
+                    blind: blind,
+                    pulse: pulse,
+                    window: window,
+                });
+            } catch (error) {
+                this.alertMessage("error");
+            }
+        },
+        changeTriggerMode({ detail }) {
+            this.triggerMode = detail.value;
+            // Update saved trigger mode when user changes it
+            if (this.triggerMode > 0) {
+                this.savedTriggerMode = this.triggerMode;
+            }
+            if (!detail.isInit) {
+                this.setTriggerInfo();
+            }
         },
         async getUploadInfo() {
             const res = await getData(URL.getUploadParam);
@@ -208,6 +316,22 @@ function Capture() {
                     bButtonCap: Number(this.capButtonEnable),
                     camWarmupMs: Number(this.camWarmupMs),
                 });
+                // If trigger capture is disabled, save current trigger mode and set to 0
+                if (!this.capAlarmInEnable) {
+                    // Save current trigger mode before disabling
+                    if (this.triggerMode > 0) {
+                        this.savedTriggerMode = this.triggerMode;
+                    }
+                    this.triggerMode = 0;
+                    await this.setTriggerInfo();
+                } else {
+                    // If trigger capture is re-enabled, restore saved trigger mode first
+                    if (this.triggerMode === 0 && this.savedTriggerMode > 0) {
+                        this.triggerMode = this.savedTriggerMode;
+                    }
+                    // Then reload trigger info to get latest values from server
+                    await this.getTriggerInfo();
+                }
             } catch (error) {
                 this.alertMessage("error");
             }
@@ -322,6 +446,39 @@ function Capture() {
         deleteTimeSetting(index) {
             this.timeCaptureList.splice(index, 1);
             this.setCaptureInfo();
+        },
+        // Validate and clamp PIR sensitivity (0-255, recommended > 20, minimum 10)
+        validatePirSens() {
+            let val = Number(this.pirSens);
+            if (isNaN(val) || val < 0) val = 15;
+            if (val > 255) val = 255;
+            // Note: Values < 10 may cause false alarms, > 20 is recommended
+            this.pirSens = val;
+            this.setTriggerInfo();
+        },
+        // Validate and clamp PIR blind time (0.5s ~ 8s)
+        validatePirBlind() {
+            let val = Number(this.pirBlind);
+            if (isNaN(val) || val < 0.5) val = 0.5;
+            if (val > 8) val = 8;
+            this.pirBlind = val;
+            this.setTriggerInfo();
+        },
+        // Validate and clamp PIR pulse count (1 ~ 4)
+        validatePirPulse() {
+            let val = Number(this.pirPulse);
+            if (isNaN(val) || val < 1) val = 1;
+            if (val > 4) val = 4;
+            this.pirPulse = val;
+            this.setTriggerInfo();
+        },
+        // Validate and clamp PIR window time (2s ~ 8s)
+        validatePirWindow() {
+            let val = Number(this.pirWindow);
+            if (isNaN(val) || val < 2) val = 2;
+            if (val > 8) val = 8;
+            this.pirWindow = val;
+            this.setTriggerInfo();
         },
     };
 }
