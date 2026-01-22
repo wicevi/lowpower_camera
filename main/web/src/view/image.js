@@ -37,45 +37,67 @@ function Image() {
             {
                 label: "320×240",
                 value: 5, // FRAMESIZE_QVGA
+                width: 320,
+                height: 240,
             },
             {
                 label: "640×480",
                 value: 8, // FRAMESIZE_VGA
+                width: 640,
+                height: 480,
             },
             {
                 label: "800×600",
                 value: 9, // FRAMESIZE_SVGA
+                width: 800,
+                height: 600,
             },
             {
                 label: "1024×768",
                 value: 10, // FRAMESIZE_XGA
+                width: 1024,
+                height: 768,
             },
             {
                 label: "1280×720",
                 value: 11, // FRAMESIZE_HD
+                width: 1280,
+                height: 720,
             },
             {
                 label: "1280×1024",
                 value: 12, // FRAMESIZE_SXGA
+                width: 1280,
+                height: 1024,
             },
             {
                 label: "1600×1200",
                 value: 13, // FRAMESIZE_UXGA
+                width: 1600,
+                height: 1200,
             },
             {
                 label: "1920×1080",
                 value: 14, // FRAMESIZE_FHD
+                width: 1920,
+                height: 1080,
             },
             {
                 label: "2048×1536",
                 value: 17, // FRAMESIZE_QXGA
+                width: 2048,
+                height: 1536,
             },
             {
                 label: "2560×1920",
                 value: 21, // FRAMESIZE_QSXGA
+                width: 2560,
+                height: 1920,
             },
         ],
         quality: 12, // image quality (0-63, higher value means lower quality)
+        // Global minimum JPEG quality for all resolutions
+        MIN_JPEG_QUALITY: 4,
         brightness: 0,
         contrast: 0,
         saturation: 0,
@@ -120,6 +142,9 @@ function Image() {
             this.frameSize = camRes.frameSize;
             this.frameSizeMount = true;
             this.quality = camRes.quality;
+            
+            // Apply quality limit after loading image info
+            this.applyQualityLimit();
             
             // Get HDR status for USB camera
             this.hdrEnable = camRes.hdrEnable ? true : false;
@@ -168,6 +193,8 @@ function Image() {
 
         changeFrameSize({ detail }) {
             this.frameSize = detail.value;
+            // Apply quality limit when resolution changes
+            this.applyQualityLimit();
             if (!detail.isInit) {
                 this.setCamInfo();
             }
@@ -179,7 +206,18 @@ function Image() {
             } else if (this.quality > 63) {
                 this.quality = 63;
             }
+            // Apply global quality limit (minimum 4)
+            this.applyQualityLimit();
             this.setCamInfo();
+        },
+        /**
+         * Apply JPEG quality limit - global minimum quality is 4
+         */
+        applyQualityLimit() {
+            if (this.quality < this.MIN_JPEG_QUALITY) {
+                console.warn(`JPEG quality ${this.quality} is below minimum ${this.MIN_JPEG_QUALITY}, limiting to ${this.MIN_JPEG_QUALITY}. This change will take effect after the next device restart.`);
+                this.quality = this.MIN_JPEG_QUALITY;
+            }
         },
 
         async setImgAdjustDefault() {

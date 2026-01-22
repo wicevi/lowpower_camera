@@ -117,6 +117,9 @@ const URL = {
     setUploadParam: baseUrl + "/capture/setUploadParam",
     getUploadParam: baseUrl + "/capture/getUploadParam",
 
+    // Trigger and PIR
+    getTriggerParam: baseUrl + "/capture/getTriggerParam",
+    setTriggerParam: baseUrl + "/capture/setTriggerParam",
 
     // MQTTFiles
     uploadMQTTCa: baseUrl + "/network/uploadMqttCa",

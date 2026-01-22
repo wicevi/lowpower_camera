@@ -47,7 +47,7 @@ const App = {
         await this.setDevTime(); // first sync time
         await this.getDeviceInfo();
         await this.getImageInfo();
-        await this.getCaptureInfo();
+        await this.getCaptureInfo(); // This will also call getTriggerInfo internally
         await this.getUploadInfo();
         await this.getDataReport();
         if (this.netmod === 'cat1') {
@@ -94,6 +94,26 @@ const App = {
     /** number input limit */
     inputNumLimit(name) {
         const tmpValue = this[name].toString().replace(/[^\d]/g, '');
+        nextTick(() => {
+            this[name] = tmpValue;
+        });
+    },
+    /** decimal number input limit */
+    inputDecimalLimit(name) {
+        let tmpValue = this[name].toString();
+        // Remove all non-digit and non-dot characters
+        tmpValue = tmpValue.replace(/[^\d.]/g, '');
+        // Replace multiple dots with single dot
+        tmpValue = tmpValue.replace(/\.{2,}/g, '.');
+        // If starts with dot, add 0 before it
+        if (tmpValue.startsWith('.')) {
+            tmpValue = '0' + tmpValue;
+        }
+        // Remove dots after first one
+        const parts = tmpValue.split('.');
+        if (parts.length > 2) {
+            tmpValue = parts[0] + '.' + parts.slice(1).join('');
+        }
         nextTick(() => {
             this[name] = tmpValue;
         });

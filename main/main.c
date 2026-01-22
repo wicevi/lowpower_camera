@@ -23,6 +23,7 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include "config.h"
 #include "system.h"
@@ -37,6 +38,8 @@
 #include "cat1.h"
 #include "iot_mip.h"
 #include "net_module.h"
+#include "morse.h"
+#include "utils.h"
 
 #define TAG "-->MAIN"
 
@@ -49,6 +52,157 @@
 #define STATUS_LED_BLINK_INTERVAL 1000
 
 modeSel_e main_mode;
+
+/**
+ * @brief Print system information for factory verification
+ * Prints device MAC, SN, firmware version, camera config, and wakeup config
+ */
+static void print_system_info(void)
+{
+    deviceInfo_t device;
+    imgAttr_t image;
+    capAttr_t capture;
+    uint8_t trigger_mode;
+    pirAttr_t pir_attr;
+    wifiAttr_t wifi;
+    
+    // Get device information
+    cfg_get_device_info(&device);
+    
+    // Get camera configuration
+    cfg_get_image_attr(&image);
+    
+    // Get capture configuration
+    cfg_get_cap_attr(&capture);
+    
+    // Get trigger mode
+    cfg_get_trigger_mode(&trigger_mode);
+    
+    // Get PIR attributes if in PIR mode
+    cfg_get_pir_attr(&pir_attr);
+    
+    // Get WiFi configuration
+    cfg_get_wifi_attr(&wifi);
+    
+    // Resolution mapping
+    const char* resolution_names[] = {
+        [5] = "320x240 (QVGA)",
+        [8] = "640x480 (VGA)",
+        [9] = "800x600 (SVGA)",
+        [10] = "1024x768 (XGA)",
+        [11] = "1280x720 (HD)",
+        [12] = "1280x1024 (SXGA)",
+        [13] = "1600x1200 (UXGA)",
+        [14] = "1920x1080 (FHD)",
+        [17] = "2048x1536 (QXGA)",
+        [21] = "2560x1920 (QSXGA)"
+    };
+    
+    const char* resolution_str = "Unknown";
+    if (image.frameSize < sizeof(resolution_names)/sizeof(resolution_names[0]) && 
+        resolution_names[image.frameSize] != NULL) {
+        resolution_str = resolution_names[image.frameSize];
+    }
+    
+    // Trigger mode string
+    const char* trigger_mode_str = "Disabled";
+    if (capture.bAlarmInCap) {
+        switch (trigger_mode) {
+            case TRIGGER_MODE_ALARM:
+                trigger_mode_str = "Alarm Input";
+                break;
+            case TRIGGER_MODE_PIR:
+                trigger_mode_str = "PIR Sensor";
+                break;
+            default:
+                trigger_mode_str = "Disabled";
+                break;
+        }
+    }
+    
+    // Get network module type
+    bool is_cat1 = netModule_is_cat1();
+    bool is_halow = netModule_is_mmwifi();
+    
+    // Calculate AP name (format: model_MAC_last3bytes)
+    char ap_name[32] = "N/A";
+    if (device.mac[0] && is_valid_mac(device.mac)) {
+        uint8_t mac_hex[6];
+        mac_str2hex(device.mac, mac_hex);
+        snprintf(ap_name, sizeof(ap_name), "%s_%02X%02X%02X", 
+                 device.model, mac_hex[3], mac_hex[4], mac_hex[5]);
+    }
+    
+    printf("========================================\n");
+    printf("    SYSTEM INFORMATION (POWER-ON)      \n");
+    printf("========================================\n");
+    printf("Device Information:\n");
+    printf("  Model: %s\n", device.model);
+    printf("  Device Name: %s\n", device.name);
+    printf("  MAC Address: %s\n", device.mac[0] ? device.mac : "N/A");
+    printf("  AP Name: %s\n", ap_name);
+    printf("  SN: %s\n", (device.sn[0] && strcmp(device.sn, "undefined") != 0) ? device.sn : "N/A");
+    printf("  Hardware Version: %s\n", device.hardVersion);
+    printf("  Firmware Version: %s\n", device.softVersion);
+    printf("  Camera Backend: %s\n", device.camera);
+    printf("  Network Module: %s\n", device.netmod[0] ? device.netmod : "N/A");
+    printf("  Country Code: %s\n", device.countryCode);
+    // Print regulatory domain info if HaLow is configured (compile-time info, independent of module insertion)
+#ifdef CONFIG_MM_BCF_MF08251_FCC
+    printf("  HaLow Regulatory Domain: FCC (915 MHz)\n");
+#elif defined(CONFIG_MM_BCF_MF08251_CE)
+    printf("  HaLow Regulatory Domain: CE (868 MHz)\n");
+#endif
+    printf("\n");
+    printf("Network Information:\n");
+    if (is_cat1) {
+        printf("  Type: Cellular (CAT1)\n");
+    } else if (is_halow) {
+        printf("  Type: Wi-Fi HaLow (802.11ah)\n");
+        printf("  SSID: %s\n", wifi.ssid[0] ? wifi.ssid : "N/A");
+        printf("  Country Code: %s\n", device.countryCode);
+    } else {
+        printf("  Type: WiFi\n");
+        printf("  SSID: %s\n", wifi.ssid[0] ? wifi.ssid : "N/A");
+    }
+    printf("\n");
+    printf("Camera Configuration:\n");
+    printf("  Resolution: %s (frameSize=%d)\n", resolution_str, image.frameSize);
+    printf("  JPEG Quality: %d (0-63, lower=better)\n", image.quality);
+    printf("  Brightness: %d\n", image.brightness);
+    printf("  Contrast: %d\n", image.contrast);
+    printf("  Saturation: %d\n", image.saturation);
+    printf("  AE Level: %d\n", image.aeLevel);
+    printf("  AGC: %s\n", image.bAgc ? "Enabled" : "Disabled");
+    printf("  Horizontal Flip: %s\n", image.bHorizonetal ? "Yes" : "No");
+    printf("  Vertical Flip: %s\n", image.bVertical ? "Yes" : "No");
+    printf("  HDR: %s\n", image.hdrEnable ? "Enabled" : "Disabled");
+    printf("\n");
+    printf("Capture Configuration:\n");
+    printf("  Scheduled Capture: %s\n", capture.bScheCap ? "Enabled" : "Disabled");
+    printf("  Capture Mode: %s\n", capture.scheCapMode == 0 ? "Timed" : "Interval");
+    printf("  Trigger Capture: %s\n", capture.bAlarmInCap ? "Enabled" : "Disabled");
+    printf("  Button Capture: %s\n", capture.bButtonCap ? "Enabled" : "Disabled");
+    printf("  Camera Warmup Delay: %lu ms\n", capture.camWarmupMs);
+    if (capture.scheCapMode == 1) {
+        const char* unit_str[] = {"min", "hour", "day"};
+        printf("  Interval: %lu %s\n", capture.intervalValue, 
+               capture.intervalUnit < 3 ? unit_str[capture.intervalUnit] : "unknown");
+    }
+    printf("\n");
+    printf("Wakeup Configuration:\n");
+    printf("  Trigger Mode: %s\n", trigger_mode_str);
+    if (capture.bAlarmInCap && trigger_mode == TRIGGER_MODE_PIR) {
+        printf("  PIR Settings:\n");
+        printf("    Sensitivity: %d (0-255, recommended >20)\n", pir_attr.sens);
+        printf("    Blind Time: %d (0-15, %.1fs)\n", pir_attr.blind, 
+               (pir_attr.blind * 0.5) + 0.5);
+        printf("    Pulse Count: %d (0-3, %d times)\n", pir_attr.pulse, pir_attr.pulse + 1);
+        printf("    Window Time: %d (0-3, %ds)\n", pir_attr.window, 
+               (pir_attr.window * 2) + 2);
+    }
+    printf("========================================\n");
+}
 
 /**
  * @brief Handle power-on reset scenario
@@ -68,6 +222,9 @@ static modeSel_e handle_power_on_reset(void)
 static modeSel_e handle_network_check(void)
 {
     ESP_LOGI(TAG, "mode_selector netModule_is_check_reset");
+    // Print system information after network check is complete
+    // This ensures accurate network module type information
+    print_system_info();
     netModule_clear_check_flag();
     return MODE_SCHEDULE;
 }

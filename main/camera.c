@@ -15,6 +15,7 @@
 #include <nvs_flash.h>
 #include <sys/param.h>
 #include <string.h>
+#include <inttypes.h>
 #include <esp_timer.h>
 #include "img_converters.h"
 #include "camera_uvc_controls.h"
@@ -32,6 +33,9 @@
 
 #define CAMERA_PIN_PWDN -1  // Not used
 #define CAMERA_PIN_RESET -1 // Not used
+
+// Global minimum JPEG quality for all resolutions
+#define MIN_JPEG_QUALITY 4
 
 // Camera interface pins
 #define CAMERA_PIN_VSYNC 6   // Vertical sync
@@ -166,6 +170,21 @@ static queueNode_t *camera_queue_node_malloc(camera_fb_t *frame, snapType_e type
 }
 
 /**
+ * Apply JPEG quality limit - global minimum quality is 4
+ * @param frameSize Frame size enum value (unused, kept for API compatibility)
+ * @param quality Pointer to quality value (will be modified if needed)
+ */
+void camera_apply_jpeg_quality_limit(framesize_t frameSize, uint8_t *quality)
+{
+    (void)frameSize;  // Unused parameter
+    if (quality != NULL && *quality < MIN_JPEG_QUALITY) {
+        ESP_LOGW(TAG, "JPEG quality %d is below minimum %d, limiting to %d", 
+                 *quality, MIN_JPEG_QUALITY, MIN_JPEG_QUALITY);
+        *quality = MIN_JPEG_QUALITY;
+    }
+}
+
+/**
  * Camera hardware configuration
  */
 static camera_config_t camera_config = {
@@ -249,7 +268,10 @@ static esp_err_t csi_camera_init(void)
     }
     // read image quality from config and set to camera_config (0-63, higher value means lower quality)
     if (image.quality <= 63) {
-        camera_config.jpeg_quality = image.quality;
+        uint8_t quality = image.quality;
+        // Apply quality limit for resolutions > 3MP
+        camera_apply_jpeg_quality_limit(camera_config.frame_size, &quality);
+        camera_config.jpeg_quality = quality;
     }
     
     err = esp_camera_init(&camera_config);
@@ -316,10 +338,23 @@ static esp_err_t csi_camera_set_image(imgAttr_t *image)
     if (current.quality != image->quality && image->quality <= 63) {
         // JPEG quality is set during initialization, modification requires camera reinitialization
         // only log here, actual application needs camera reinitialization to take effect
+        uint8_t quality = image->quality;
+        // Apply quality limit for resolutions > 3MP
+        framesize_t current_frame_size = (framesize_t)image->frameSize;
+        if (current_frame_size >= FRAMESIZE_INVALID) {
+            // Get current frame size from sensor if not provided
+            sensor_t *s = esp_camera_sensor_get();
+            if (s) {
+                current_frame_size = s->status.framesize;
+            }
+        }
+        camera_apply_jpeg_quality_limit(current_frame_size, &quality);
         ESP_LOGI(TAG, "quality changed: %d -> %d (requires camera reinit to take effect)", 
-                 current.quality, image->quality);
+                 current.quality, quality);
         // update quality value in config, will be used during next initialization
-        camera_config.jpeg_quality = image->quality;
+        camera_config.jpeg_quality = quality;
+        // Also update the image structure to reflect the adjusted quality
+        image->quality = quality;
     }
     return ESP_OK;
 }
