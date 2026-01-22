@@ -22,22 +22,12 @@ jobs:
       fail-fast: false
       matrix:
         build_version:
-          - name: "FCC_PIR"
+          - name: "FCC"
             config_fcc: true
             config_ce: false
-            pir_enable: 1
-          - name: "CE_PIR"
+          - name: "CE"
             config_fcc: false
             config_ce: true
-            pir_enable: 1
-          - name: "FCC_ALARMIN"
-            config_fcc: true
-            config_ce: false
-            pir_enable: 0
-          - name: "CE_ALARMIN"
-            config_fcc: false
-            config_ce: true
-            pir_enable: 0
     
     steps:
     - name: Checkout repository
@@ -95,14 +85,6 @@ jobs:
         update_config "sdkconfig.defaults" "CONFIG_MM_BCF_MF08251_CE" "${{ matrix.build_version.config_ce }}"
         update_config "sdkconfig" "CONFIG_MM_BCF_MF08251_FCC" "${{ matrix.build_version.config_fcc }}"
         update_config "sdkconfig" "CONFIG_MM_BCF_MF08251_CE" "${{ matrix.build_version.config_ce }}"
-        
-        # Update PIR_ENABLE
-        if [ ! -f main/pir.h ]; then
-          echo "::error::main/pir.h not found"
-          exit 1
-        fi
-        sed -i "s/^#define PIR_ENABLE[[:space:]]*[0-9]*/#define PIR_ENABLE          ${{ matrix.build_version.pir_enable }}/" main/pir.h
-        echo "✓ PIR_ENABLE: ${{ matrix.build_version.pir_enable }}"
         
         echo "::endgroup::"
 
