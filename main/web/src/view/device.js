@@ -31,9 +31,9 @@ function Device() {
             this.countryCode = res.countryCode;
             this.camera = res.camera;
             const softType = Number(res.softVersion.split('.')[1])
-            if (softType === 1) {
+            if (res.softVersion.indexOf("FCC") !== -1) {
                 this.regionOptions = this.regionOptionsForFcc 
-            } else if(softType === 2) {
+            } else if(res.softVersion.indexOf("CE") !== -1) {
                 this.regionOptions = this.regionOptionsForCe // NE_101.2.0.1 CE
             }
             const { freePercent, bBattery } = await getData(URL.getDevBattery);
