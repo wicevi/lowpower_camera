@@ -272,6 +272,7 @@ static modeSel_e handle_deep_sleep_wakeup(snapType_e *snapType)
             return handle_timer_wakeup(snapType);
             
         case WAKEUP_ALARMIN:
+            sleep_reset_wakeup_todo();  // Clear pending todo since timer schedule is no longer valid
             *snapType = SNAP_ALARMIN;
             return MODE_SNAPSHOT;
             
