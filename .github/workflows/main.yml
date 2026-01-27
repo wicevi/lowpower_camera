@@ -203,10 +203,8 @@ jobs:
           
           This release includes the following firmware versions:
           
-          - **NE_101_${{ steps.get_version.outputs.version }}_FCC_PIR.zip** - WIFI/CAT1/HALOW 915M version with PIR support
-          - **NE_101_${{ steps.get_version.outputs.version }}_CE_PIR.zip** - WIFI/CAT1/HALOW 868M version with PIR support
-          - **NE_101_${{ steps.get_version.outputs.version }}_FCC_ALARMIN.zip** - WIFI/CAT1/HALOW 915M version with ALARMIN support
-          - **NE_101_${{ steps.get_version.outputs.version }}_CE_ALARMIN.zip** - WIFI/CAT1/HALOW 868M version with ALARMIN support
+          - **NE_101_${{ steps.get_version.outputs.version }}_FCC.zip** - WIFI/CAT1/HALOW 915M version with PIR and ALARMIN support
+          - **NE_101_${{ steps.get_version.outputs.version }}_CE.zip** - WIFI/CAT1/HALOW 868M version with PIR and ALARMIN support
           
           ### Build Information
           - ESP-IDF Version: ${{ env.ESP_IDF_VERSION }}
