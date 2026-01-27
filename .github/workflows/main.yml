@@ -57,8 +57,8 @@ jobs:
         echo "::group::Configuring for $BUILD_NAME"
         echo "Version: $VERSION"
         
-        # Set PROJECT_VER using tag name (format: NE_101_V1.5_FCC_PIR)
-        PROJECT_VER="NE_101_${VERSION}_${BUILD_NAME}"
+        # Set PROJECT_VER using tag name (format: NE101_V1.5_FCC)
+        PROJECT_VER="NE101_${VERSION}_${BUILD_NAME}"
         sed -i "s|set(PROJECT_VER \".*\")|set(PROJECT_VER \"${PROJECT_VER}\")|" CMakeLists.txt
         echo "✓ PROJECT_VER: ${PROJECT_VER}"
         
